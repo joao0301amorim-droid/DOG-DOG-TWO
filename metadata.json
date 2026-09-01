@@ -1,0 +1,6 @@
+{
+  "name": "Mindset Score & Indicadores",
+  "description": "Aplicativo de rastreamento de mindset score, botões de ação e valores, planilha de indicadores e análise inteligente com Gemini.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
