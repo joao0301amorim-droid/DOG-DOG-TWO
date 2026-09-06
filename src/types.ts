@@ -121,6 +121,9 @@ export interface Goal {
   notes?: string;
   createdAt: string;
   updatedAt: string;
+  completedAt?: string; // Data de conclusão da meta (ex: "2026-08-25" ou "2026-09-06")
+  completionBonus?: number; // Bônus de pontos positivos para o score do mês (ex: 50 pontos)
+  percentGainAchieved?: number; // Percentual de ganho atingido com a meta (ex: 100%, 105%)
 }
 
 export type MonthlyGoal = Goal;
@@ -147,6 +150,63 @@ export interface GoalConsistencyScore {
   totalConsistencyScore: number; // 0 - 100 weighted
   statusLabel: string; // 'META SUSTENTÁVEL', 'BOM RITMO DE CONSTRUÇÃO', 'EM RISCO POR OSCILAÇÃO', 'RITMO CRÍTICO OU DESVIADO'
   statusColor: string; // emerald, teal, amber, rose
+}
+
+// 📊 SISTEMA DE REGISTRO DE SCORE MENSAL & IA
+export interface IndicatorImpactSummary {
+  indicatorId: string;
+  name: string;
+  category: string;
+  isPositive: boolean;
+  weight: number;
+  iconName: string;
+  unit?: string;
+  frequency: number; // Quantos dias esteve ativo/marcado no mês
+  totalPoints: number; // Total de pontos gerados ou perdidos
+  moneyTotal?: number; // Valor financeiro faturado ou gasto com este indicador
+}
+
+export interface MonthlyAIAdvice {
+  monthKey: string;
+  generatedAt: string;
+  executiveSummary: string;
+  positiveDrivers: string[];
+  frictionPoints: string[];
+  strategicAdvice: string;
+  nextSteps: Array<{
+    title: string;
+    description: string;
+    actionType: 'goal' | 'habit' | 'defense';
+  }>;
+  suggestedPrimaryGoal?: {
+    name: string;
+    targetValue: number;
+    unit: string;
+    rationale: string;
+  };
+  modelUsed?: string;
+}
+
+export interface MonthlyScoreRecord {
+  monthKey: string; // "2026-08"
+  monthName: string; // "Agosto de 2026"
+  basePositiveScore: number; // Soma dos scores positivos diários validados
+  goalBonusScore: number; // Bônus de metas concluídas (ex: +50 por meta concluída)
+  totalPositiveScore: number; // Score Total do Mês (ex: +240 Pontos positivos)
+  daysLogged: number;
+  totalDaysInMonth: number;
+  avgDailyScore: number;
+  totalEarned: number; // Total faturado no mês
+  totalSpent: number; // Total gasto no mês
+  netResult: number; // Resultado Líquido
+  completedGoalsCount: number;
+  totalGoalsCount: number;
+  goals: Goal[];
+  completedGoals: Goal[];
+  pendingGoals: Goal[];
+  positiveIndicators: IndicatorImpactSummary[];
+  negativeIndicators: IndicatorImpactSummary[];
+  advice?: MonthlyAIAdvice;
 }
 
 export interface ChatMessage {

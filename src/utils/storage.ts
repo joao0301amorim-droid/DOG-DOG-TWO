@@ -1,4 +1,4 @@
-import { DailyLog, Indicator, Goal } from '../types';
+import { DailyLog, Indicator, Goal, MonthlyAIAdvice } from '../types';
 import { DEFAULT_INDICATORS } from '../data/defaultIndicators';
 import { SAMPLE_DAILY_LOGS } from '../data/sampleHistory';
 import { DEFAULT_GOALS } from '../data/defaultGoals';
@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   LOGS: 'mindset_daily_logs_v2',
   GOALS: 'mindset_monthly_goals_v2',
   SELECTED_DATE: 'mindset_selected_date_v1',
+  MONTHLY_ADVICE_PREFIX: 'mindset_monthly_advice_v2_',
 };
 
 export function loadIndicators(): Indicator[] {
@@ -57,7 +58,15 @@ export function loadGoals(): Goal[] {
     const saved = localStorage.getItem(STORAGE_KEYS.GOALS);
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Ensure default goals like August exist if not already present
+        const existingIds = new Set(parsed.map((g: Goal) => g.id));
+        const missingDefaults = DEFAULT_GOALS.filter((dg) => !existingIds.has(dg.id));
+        if (missingDefaults.length > 0) {
+          return [...parsed, ...missingDefaults];
+        }
+        return parsed;
+      }
     }
   } catch (e) {
     console.error('Erro ao carregar metas:', e);
@@ -74,6 +83,26 @@ export function saveGoals(goals: Goal[]): void {
 }
 
 export { loadGoals as loadSavedGoals, saveGoals as saveMonthlyGoals };
+
+export function loadMonthlyAdvice(monthKey: string): MonthlyAIAdvice | null {
+  try {
+    const saved = localStorage.getItem(`${STORAGE_KEYS.MONTHLY_ADVICE_PREFIX}${monthKey}`);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error('Erro ao carregar aconselhamento mensal:', e);
+  }
+  return null;
+}
+
+export function saveMonthlyAdvice(monthKey: string, advice: MonthlyAIAdvice): void {
+  try {
+    localStorage.setItem(`${STORAGE_KEYS.MONTHLY_ADVICE_PREFIX}${monthKey}`, JSON.stringify(advice));
+  } catch (e) {
+    console.error('Erro ao salvar aconselhamento mensal:', e);
+  }
+}
 
 export function exportLogsToCSV(logs: DailyLog[], indicators: Indicator[]): void {
   if (!logs || logs.length === 0) return;

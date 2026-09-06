@@ -6,9 +6,12 @@ import {
   calculateGoalProjection,
   calculateGoalConsistencyScore,
   getMonthFormatted,
+  computeMonthlyScoreRecord,
 } from '../utils/monthHierarchy';
 import { GoalModal } from './GoalModal';
 import { SwapGoalModal } from './SwapGoalModal';
+import { CompleteGoalModal } from './CompleteGoalModal';
+import { MonthlyScoreLedgerView } from './MonthlyScoreLedgerView';
 import {
   Target,
   Plus,
@@ -63,8 +66,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 }) => {
   // Current active month (default to 2026-09 as in prompt)
   const [activeMonthKey, setActiveMonthKey] = useState<string>('2026-09');
+  const [activeViewTab, setActiveViewTab] = useState<'dashboard' | 'ledger'>('dashboard');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
+  const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
+  const [goalToComplete, setGoalToComplete] = useState<Goal | null>(null);
   const [showManagerSection, setShowManagerSection] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
   const [confirmDeleteGoal, setConfirmDeleteGoal] = useState<{ id: string; name: string; isPrimary: boolean } | null>(null);
@@ -89,6 +95,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   const monthSummary = useMemo(() => {
     return computeMonthSummary(activeMonthKey, logs);
   }, [activeMonthKey, logs]);
+
+  // Consolidated monthly score record (Score Base + Bônus de Metas + Faturamento)
+  const monthlyScoreRecord = useMemo(() => {
+    return computeMonthlyScoreRecord(activeMonthKey, logs, goals, indicators);
+  }, [activeMonthKey, logs, goals, indicators]);
 
   // Filter goals for this month
   const monthGoals = useMemo(() => {
@@ -161,14 +172,24 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     showTemporaryNotice(`Status da meta "${goal.name}" alterado para ${nextStatus === 'active' ? 'Ativa' : 'Pausada'}.`);
   };
 
-  const handleMarkComplete = (goal: Goal) => {
-    const nextStatus = goal.status === 'completed' ? 'active' : 'completed';
-    onSaveGoal({ ...goal, status: nextStatus, updatedAt: new Date().toISOString() });
+  const handleOpenCompleteModal = (goal: Goal) => {
+    setGoalToComplete(goal);
+    setIsCompleteModalOpen(true);
+  };
+
+  const handleConfirmCompleteGoal = (updatedGoal: Goal) => {
+    onSaveGoal(updatedGoal);
+    const bonus = updatedGoal.completionBonus || 50;
+    const isCompleted = updatedGoal.status === 'completed';
     showTemporaryNotice(
-      nextStatus === 'completed'
-        ? `Parabéns! Meta "${goal.name}" marcada como CONCLUÍDA! 🏆`
-        : `Meta "${goal.name}" reaberta como ativa.`
+      isCompleted
+        ? `🏆 Meta "${updatedGoal.name}" concluída! +${bonus} pontos positivos adicionados ao Score de ${monthSummary.monthName}!`
+        : `Meta "${updatedGoal.name}" reaberta como ativa.`
     );
+  };
+
+  const handleMarkComplete = (goal: Goal) => {
+    handleOpenCompleteModal(goal);
   };
 
   // Switch / Swap Primary Goal
@@ -263,6 +284,68 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
         </div>
       )}
 
+      {/* View Switcher Tabs: Metas & Ritmo vs Registro de Score Mensal & IA */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2.5 rounded-2xl bg-[#111114] border border-[#1e293b] shadow-lg">
+        <div className="flex items-center gap-1.5 bg-[#080809] p-1 rounded-xl border border-[#252530]">
+          <button
+            id="tab-goals-dashboard"
+            onClick={() => setActiveViewTab('dashboard')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-mono font-bold transition-all ${
+              activeViewTab === 'dashboard'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-950'
+                : 'text-slate-400 hover:text-white hover:bg-[#16161c]'
+            }`}
+          >
+            <Target className="w-4 h-4" />
+            <span>Metas & Ritmo Diário</span>
+          </button>
+
+          <button
+            id="tab-monthly-score-ledger"
+            onClick={() => setActiveViewTab('ledger')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-mono font-bold transition-all ${
+              activeViewTab === 'ledger'
+                ? 'bg-gradient-to-r from-indigo-600 to-emerald-600 text-white shadow-md shadow-indigo-950'
+                : 'text-slate-400 hover:text-white hover:bg-[#16161c]'
+            }`}
+          >
+            <Award className="w-4 h-4 text-emerald-400" />
+            <span>Registro de Score Mensal & IA</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-extrabold border border-emerald-500/30">
+              +{monthlyScoreRecord.totalPositiveScore} pts
+            </span>
+          </button>
+        </div>
+
+        {/* Quick Month Indicator Banner */}
+        <div className="flex items-center gap-2.5 px-3 py-1 font-mono text-xs text-slate-400">
+          <span>{monthSummary.monthName}:</span>
+          <strong className="text-emerald-400">+{monthlyScoreRecord.totalPositiveScore} pts</strong>
+          <span>•</span>
+          <span className="text-slate-300">{monthlyScoreRecord.completedGoalsCount} meta(s) batida(s)</span>
+          {activeViewTab === 'dashboard' && (
+            <button
+              onClick={() => setActiveViewTab('ledger')}
+              className="text-[11px] text-indigo-400 hover:text-indigo-300 underline font-bold"
+            >
+              Ver Registro Completo & IA →
+            </button>
+          )}
+        </div>
+      </div>
+
+      {activeViewTab === 'ledger' ? (
+        <MonthlyScoreLedgerView
+          logs={logs}
+          goals={goals}
+          indicators={indicators}
+          activeMonthKey={activeMonthKey}
+          onChangeMonth={(newKey) => setActiveMonthKey(newKey)}
+          onOpenCompleteModal={handleOpenCompleteModal}
+          onSelectDate={onSelectDate}
+        />
+      ) : (
+        <>
       {/* 1. Month Header & Navigation */}
       <div
         id="goals-month-header"
@@ -646,14 +729,15 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         {/* Mark complete */}
                         <button
                           onClick={() => handleMarkComplete(goal)}
-                          className={`p-2 rounded-xl border transition-colors ${
+                          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-mono font-bold transition-all ${
                             goal.status === 'completed'
                               ? 'bg-emerald-600 text-white border-emerald-500'
-                              : 'bg-[#16161a] hover:bg-[#222228] text-slate-300 border-[#2e2e36]'
+                              : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
                           }`}
-                          title="Marcar como Concluída"
+                          title={goal.status === 'completed' ? 'Meta concluída (clique para ver detalhes)' : 'Concluir meta (+ bônus)'}
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">{goal.status === 'completed' ? `+${goal.completionBonus || 50} pts` : 'Concluir'}</span>
                         </button>
 
                         {/* Duplicate to next month */}
@@ -752,6 +836,28 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     {paceInfo.label}
                   </span>
 
+                  {/* Botão de Conclusão da Meta com Ganho & Pontos */}
+                  {primaryGoal.status === 'completed' ? (
+                    <button
+                      onClick={() => handleOpenCompleteModal(primaryGoal)}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-mono font-bold transition-all shadow-md shadow-emerald-950/40"
+                      title="Ver detalhes da conclusão"
+                    >
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      <span>Concluída (+{primaryGoal.completionBonus || 50} pts)</span>
+                    </button>
+                  ) : (
+                    <button
+                      id="complete-primary-goal-btn"
+                      onClick={() => handleOpenCompleteModal(primaryGoal)}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold text-xs uppercase tracking-wider shadow-lg shadow-emerald-950/60 transition-all active:scale-95"
+                      title="Concluir esta meta e receber +50 pontos positivos no score deste mês"
+                    >
+                      <Award className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Concluir Meta (+50 pts)</span>
+                    </button>
+                  )}
+
                   {/* Trocar Meta Principal */}
                   {monthGoals.length > 1 && (
                     <button
@@ -771,18 +877,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     title={primaryGoal.status === 'active' ? 'Pausar Meta' : 'Ativar Meta'}
                   >
                     {primaryGoal.status === 'active' ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                  </button>
-
-                  <button
-                    onClick={() => handleMarkComplete(primaryGoal)}
-                    className={`p-2 rounded-xl border transition-colors ${
-                      primaryGoal.status === 'completed'
-                        ? 'bg-emerald-600 text-white border-emerald-500'
-                        : 'bg-[#1a1a1e] hover:bg-[#25252d] text-slate-300 border-[#2e2e36]'
-                    }`}
-                    title="Marcar como Concluída"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
                   </button>
 
                   <button
@@ -811,6 +905,30 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                   </button>
                 </div>
               </div>
+
+              {/* Completed Goal Spotlight Banner */}
+              {primaryGoal.status === 'completed' && (
+                <div className="mt-5 p-4 rounded-2xl bg-gradient-to-r from-emerald-950/60 via-[#0a2018] to-indigo-950/50 border border-emerald-500/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-emerald-950/20">
+                  <div className="flex items-center gap-3 text-emerald-300">
+                    <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                      <Award className="w-5 h-5 text-amber-300" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-400">
+                        Meta Concluída com Sucesso! 🏆
+                      </div>
+                      <div className="text-sm font-bold text-white mt-0.5">
+                        Data de conclusão: {primaryGoal.completedAt || 'Final do mês'} • Ganho: {primaryGoal.percentGainAchieved || 100}%
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-mono font-black shadow-inner">
+                      +{primaryGoal.completionBonus || 50} PONTOS POSITIVOS NO SCORE
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Middle Section: Values, Visual Blocks & Pace */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 my-6 items-center">
@@ -1080,19 +1198,31 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     )}
                   </div>
 
+                  {/* Completed Badge if completed */}
+                  {goal.status === 'completed' && (
+                    <div className="mt-3 p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-[11px] font-mono text-emerald-300">
+                      <span className="flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Concluída em {goal.completedAt || 'Final do mês'}</span>
+                      </span>
+                      <strong className="text-emerald-400">+{goal.completionBonus || 30} pts</strong>
+                    </div>
+                  )}
+
                   <div className="mt-4 pt-3 border-t border-[#1e293b] flex items-center justify-between text-xs font-mono">
                     <span className="text-slate-500">
-                      Status: <strong className="text-slate-300 uppercase">{goal.status}</strong>
+                      Status: <strong className={goal.status === 'completed' ? 'text-emerald-400 uppercase font-bold' : 'text-slate-300 uppercase'}>{goal.status}</strong>
                     </span>
                     <button
                       onClick={() => handleMarkComplete(goal)}
-                      className={`px-3 py-1 rounded-lg border text-xs font-semibold transition-colors ${
+                      className={`px-3.5 py-1.5 rounded-lg border text-xs font-mono font-bold transition-all flex items-center gap-1.5 ${
                         goal.status === 'completed'
-                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                          : 'bg-[#16161a] text-slate-300 border-[#2e2e36] hover:text-white'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                          : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-950/40'
                       }`}
                     >
-                      {goal.status === 'completed' ? 'Concluída ✓' : 'Concluir'}
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>{goal.status === 'completed' ? `Concluída (+${goal.completionBonus || 30} pts)` : 'Concluir (+30 pts)'}</span>
                     </button>
                   </div>
                 </div>
@@ -1178,6 +1308,20 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
           ))}
         </div>
       </div>
+      </>
+      )}
+
+      {/* MODAL: Concluir Meta com Bônus de Score */}
+      <CompleteGoalModal
+        isOpen={isCompleteModalOpen}
+        onClose={() => {
+          setIsCompleteModalOpen(false);
+          setGoalToComplete(null);
+        }}
+        goal={goalToComplete}
+        onConfirmComplete={handleConfirmCompleteGoal}
+        activeMonthKey={activeMonthKey}
+      />
 
       {/* MODAL: Criar / Editar Meta */}
       <GoalModal

@@ -168,8 +168,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Target className="w-4 h-4 text-amber-400" />
             <span className="flex items-center gap-1.5">
-              🎯 Metas Mensais
-              <span className="text-[9px] font-mono px-1 rounded bg-amber-500/20 text-amber-300 font-bold">NOVO</span>
+              Metas & Score Mensal
+              <span className="text-[9px] font-mono px-1 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                +Pontos & IA
+              </span>
             </span>
           </button>
 

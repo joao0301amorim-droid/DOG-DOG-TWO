@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { DailyLog, Indicator, ChatMessage } from '../types';
+import { safeFetchJson } from '../utils/safeApi';
 import {
   Bot,
   Sparkles,
@@ -55,25 +56,42 @@ export const GeminiCoachView: React.FC<GeminiCoachViewProps> = ({
     setIsAnalyzing(true);
     setAnalysisError('');
     try {
-      const res = await fetch('/api/ai/analyze-mindset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          logs,
-          indicators,
-          period: 'Últimos 7 a 14 dias',
-        }),
-      });
+      const result = await safeFetchJson<{ analysis?: string; error?: string }>(
+        '/api/ai/analyze-mindset',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            logs,
+            indicators,
+            period: 'Últimos 7 a 14 dias',
+          }),
+        }
+      );
 
-      const data = await res.json();
-      if (data.analysis) {
-        setAnalysis(data.analysis);
+      if (result.ok && result.data?.analysis) {
+        setAnalysis(result.data.analysis);
       } else {
-        setAnalysisError(data.error || 'Erro ao gerar análise do Gemini.');
+        console.error('[GeminiCoachView] Falha no diagnóstico de mindset:', {
+          status: result.status,
+          statusText: result.statusText,
+          error: result.error,
+          rawBody: result.rawBody,
+        });
+
+        const friendlyError =
+          result.error &&
+          !result.error.includes('JSON') &&
+          !result.error.includes('Unexpected') &&
+          !result.error.includes('status')
+            ? result.error
+            : 'O servidor de IA está com alta demanda momentânea. Por favor, tente gerar o diagnóstico novamente em alguns instantes.';
+
+        setAnalysisError(friendlyError);
       }
     } catch (err: any) {
-      console.error(err);
-      setAnalysisError('Falha ao conectar com o servidor Gemini.');
+      console.error('[GeminiCoachView] Exceção na análise:', err);
+      setAnalysisError('Falha ao conectar com o servidor Gemini. Tente novamente em instantes.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -91,43 +109,78 @@ export const GeminiCoachView: React.FC<GeminiCoachViewProps> = ({
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    // Atualiza histórico com a mensagem do usuário
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
     setInputMessage('');
     setIsChatting(true);
 
     try {
-      const res = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: userMsg.text,
-          history: messages,
-          contextData: {
-            totalLogs: logs.length,
-            recentLogs: logs.slice(-7),
-            indicators: indicators.map((i) => ({ name: i.name, category: i.category, weight: i.weight })),
-            selectedDate,
-          },
-        }),
-      });
+      const result = await safeFetchJson<{ reply?: string; error?: string }>(
+        '/api/ai/chat',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: userMsg.text,
+            history: updatedMessages,
+            contextData: {
+              totalLogs: logs.length,
+              recentLogs: logs.slice(-7),
+              indicators: indicators.map((i) => ({
+                name: i.name,
+                category: i.category,
+                weight: i.weight,
+              })),
+              selectedDate,
+            },
+          }),
+        }
+      );
 
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || 'Erro ao conectar ao serviço.');
+      // Tratamento seguro: checa se a resposta é válida e contém texto de resposta
+      if (!result.ok || !result.data?.reply) {
+        console.error('[GeminiCoachView Chat] Falha ao obter resposta do Coach:', {
+          status: result.status,
+          statusText: result.statusText,
+          error: result.error,
+          rawBodyPreview: result.rawBody?.slice(0, 300),
+        });
+
+        // Mensagem amigável que nunca expõe erros técnicos como "Unexpected end of JSON"
+        const friendlyMessage =
+          result.error &&
+          !result.error.includes('JSON') &&
+          !result.error.includes('Response') &&
+          !result.error.includes('Unexpected') &&
+          !result.error.includes('status')
+            ? result.error
+            : 'Desculpe, tive uma instabilidade momentânea na conexão com o servidor de IA. Por favor, tente enviar sua pergunta novamente em alguns instantes. Seus dados diários e notas continuam preservados!';
+
+        const errorMsg: ChatMessage = {
+          id: `gemini-${Date.now()}`,
+          sender: 'gemini',
+          text: friendlyMessage,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+        setMessages((prev) => [...prev, errorMsg]);
+        return;
       }
 
+      // Sucesso na resposta do Coach
       const botMsg: ChatMessage = {
         id: `gemini-${Date.now()}`,
         sender: 'gemini',
-        text: data.reply || 'Aqui está a orientação solicitada.',
+        text: result.data.reply,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, botMsg]);
     } catch (err: any) {
+      console.error('[GeminiCoachView Chat] Exceção crítica ao processar envio:', err);
       const errorMsg: ChatMessage = {
         id: `gemini-${Date.now()}`,
         sender: 'gemini',
-        text: err?.message || 'O servidor de IA está com alta demanda momentânea. Por favor, tente novamente em instantes.',
+        text: 'Não foi possível estabelecer contato com o Coach no momento. Verifique sua conexão e tente novamente.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, errorMsg]);

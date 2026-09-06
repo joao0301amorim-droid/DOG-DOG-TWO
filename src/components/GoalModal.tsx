@@ -77,6 +77,9 @@ export const GoalModal: React.FC<GoalModalProps> = ({
       notes: notes.trim(),
       createdAt: goalToEdit ? goalToEdit.createdAt : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      completedAt: goalToEdit?.completedAt,
+      completionBonus: goalToEdit?.completionBonus ?? (priority === 'PRINCIPAL' ? 50 : 30),
+      percentGainAchieved: goalToEdit?.percentGainAchieved,
     };
 
     onSaveGoal(goalData);

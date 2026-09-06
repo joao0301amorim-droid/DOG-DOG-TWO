@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Indicator, IndicatorCategory, IndicatorType } from '../types';
 import { getIndicatorIcon } from '../utils/iconHelper';
+import { safeFetchJson } from '../utils/safeApi';
 import { X, Sparkles, Plus, Check, Loader2, Wand2 } from 'lucide-react';
 
 interface AddIndicatorModalProps {
@@ -92,23 +93,31 @@ export const AddIndicatorModal: React.FC<AddIndicatorModalProps> = ({
     setIsSuggesting(true);
     setSuggestError('');
     try {
-      const res = await fetch('/api/ai/suggest-indicators', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userGoal: userGoal.trim(),
-          currentIndicators: existingIndicators,
-        }),
-      });
-      const data = await res.json();
-      if (data.suggestions && Array.isArray(data.suggestions)) {
-        setAiSuggestions(data.suggestions);
+      const result = await safeFetchJson<{ suggestions?: any[]; error?: string }>(
+        '/api/ai/suggest-indicators',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userGoal: userGoal.trim(),
+            currentIndicators: existingIndicators,
+          }),
+        }
+      );
+
+      if (result.ok && result.data?.suggestions && Array.isArray(result.data.suggestions)) {
+        setAiSuggestions(result.data.suggestions);
       } else {
-        setSuggestError('Nenhuma sugestão retornada pelo Gemini.');
+        console.error('[AddIndicatorModal] Falha ao obter sugestões:', {
+          status: result.status,
+          error: result.error,
+          rawBody: result.rawBody,
+        });
+        setSuggestError(result.error || 'Nenhuma sugestão retornada no momento. Tente novamente.');
       }
     } catch (err: any) {
-      console.error(err);
-      setSuggestError('Erro ao comunicar com o Gemini. Tente novamente.');
+      console.error('[AddIndicatorModal] Exceção:', err);
+      setSuggestError('Erro ao comunicar com o servidor de IA. Tente novamente.');
     } finally {
       setIsSuggesting(false);
     }
