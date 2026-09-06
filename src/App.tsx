@@ -1,11 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Indicator, DailyLog, ScoreTier } from './types';
-import { loadIndicators, saveIndicators, loadDailyLogs, saveDailyLogs } from './utils/storage';
+import { Indicator, DailyLog, ScoreTier, MonthlyGoal } from './types';
+import {
+  loadIndicators,
+  saveIndicators,
+  loadDailyLogs,
+  saveDailyLogs,
+  loadSavedGoals,
+  saveMonthlyGoals,
+} from './utils/storage';
 import { calculateDailyScore, getDayOfWeekName } from './utils/scoreCalculator';
 import { SCORE_TIERS } from './data/defaultIndicators';
 import { Navbar } from './components/Navbar';
 import { ScoreBanner } from './components/ScoreBanner';
 import { ActionButtonsPanel } from './components/ActionButtonsPanel';
+import { GoalsView } from './components/GoalsView';
 import { SpreadsheetView } from './components/SpreadsheetView';
 import { WeeklyAnalysisView } from './components/WeeklyAnalysisView';
 import { GeminiCoachView } from './components/GeminiCoachView';
@@ -13,13 +21,15 @@ import { AndroidCodeExportView } from './components/AndroidCodeExportView';
 import { AddIndicatorModal } from './components/AddIndicatorModal';
 import { SpreadsheetLinkModal } from './components/SpreadsheetLinkModal';
 import { DatabaseTrackingGuideModal } from './components/DatabaseTrackingGuideModal';
+import { IndicatorManagerModal } from './components/IndicatorManagerModal';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'actions' | 'spreadsheet' | 'weekly' | 'gemini' | 'android'>('actions');
+  const [activeTab, setActiveTab] = useState<'actions' | 'goals' | 'spreadsheet' | 'weekly' | 'gemini' | 'android'>('actions');
 
   // Persistence State
   const [indicators, setIndicators] = useState<Indicator[]>(() => loadIndicators());
   const [dailyLogs, setDailyLogs] = useState<DailyLog[]>(() => loadDailyLogs());
+  const [goals, setGoals] = useState<MonthlyGoal[]>(() => loadSavedGoals());
 
   // Date Selection (default to today)
   const [selectedDate, setSelectedDate] = useState<string>(() => {
@@ -28,10 +38,16 @@ export default function App() {
 
   // Current day editing state
   const [currentValues, setCurrentValues] = useState<Record<string, boolean | number>>({});
+  const [currentMoneySpent, setCurrentMoneySpent] = useState<number>(0);
+  const [currentSpentDetails, setCurrentSpentDetails] = useState<Record<string, number>>({});
+  const [currentTextValues, setCurrentTextValues] = useState<Record<string, string>>({});
   const [currentObservation, setCurrentObservation] = useState<string>('');
+
+  // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSpreadsheetModalOpen, setIsSpreadsheetModalOpen] = useState(false);
   const [isDatabaseGuideModalOpen, setIsDatabaseGuideModalOpen] = useState(false);
+  const [isIndicatorManagerOpen, setIsIndicatorManagerOpen] = useState(false);
 
   // Sync with storage on changes
   useEffect(() => {
@@ -42,11 +58,19 @@ export default function App() {
     saveDailyLogs(dailyLogs);
   }, [dailyLogs]);
 
+  useEffect(() => {
+    saveMonthlyGoals(goals);
+  }, [goals]);
+
   // When selectedDate changes, load existing log if present
   useEffect(() => {
     const existingLog = dailyLogs.find((l) => l.date === selectedDate);
     if (existingLog) {
       setCurrentValues(existingLog.values || {});
+      const spentTotal = Number(existingLog.moneySpent ?? existingLog.spentDetails?.['H02'] ?? 0);
+      setCurrentMoneySpent(spentTotal);
+      setCurrentSpentDetails(existingLog.spentDetails || (spentTotal > 0 ? { H02: spentTotal } : {}));
+      setCurrentTextValues(existingLog.textValues || {});
       setCurrentObservation(existingLog.observation || '');
     } else {
       // Default empty day
@@ -55,6 +79,9 @@ export default function App() {
         defaults[ind.id] = ind.defaultValue ?? (ind.type === 'boolean' ? false : 0);
       });
       setCurrentValues(defaults);
+      setCurrentMoneySpent(0);
+      setCurrentSpentDetails({});
+      setCurrentTextValues({});
       setCurrentObservation('');
     }
   }, [selectedDate, dailyLogs, indicators]);
@@ -121,6 +148,23 @@ export default function App() {
     }));
   };
 
+  const handleUpdateMoneySpent = (amount: number, indicatorId = 'H02') => {
+    setCurrentSpentDetails((prev) => {
+      const updated = { ...prev, [indicatorId]: amount };
+      // Sum all spent details safely
+      const total = Object.values(updated).reduce<number>((acc, curr) => acc + (Number(curr) || 0), 0);
+      setCurrentMoneySpent(total);
+      return updated;
+    });
+  };
+
+  const handleUpdateTextValue = (indicatorId: string, text: string) => {
+    setCurrentTextValues((prev) => ({
+      ...prev,
+      [indicatorId]: text,
+    }));
+  };
+
   const handleToggleIndicatorActive = (indicatorId: string) => {
     setIndicators((prev) =>
       prev.map((ind) => {
@@ -142,6 +186,9 @@ export default function App() {
       tier: scoreResult.tier,
       values: { ...currentValues },
       moneyEarned,
+      moneySpent: currentMoneySpent,
+      spentDetails: { ...currentSpentDetails },
+      textValues: { ...currentTextValues },
       observation: currentObservation,
       validatedAt: new Date().toISOString(),
     };
@@ -169,6 +216,19 @@ export default function App() {
     setActiveTab('actions');
   };
 
+  // Goal Handlers
+  const handleCreateGoal = (newGoal: MonthlyGoal) => {
+    setGoals((prev) => [...prev, newGoal]);
+  };
+
+  const handleUpdateGoal = (updatedGoal: MonthlyGoal) => {
+    setGoals((prev) => prev.map((g) => (g.id === updatedGoal.id ? updatedGoal : g)));
+  };
+
+  const handleDeleteGoal = (goalId: string) => {
+    setGoals((prev) => prev.filter((g) => g.id !== goalId));
+  };
+
   return (
     <div className="min-h-screen bg-[#080809] text-slate-100 flex flex-col font-sans selection:bg-indigo-500/30 selection:text-indigo-200">
       {/* Top Navigation */}
@@ -180,6 +240,7 @@ export default function App() {
         currentScore={scoreResult.score}
         currentTierInfo={currentTierInfo}
         onOpenAddModal={() => setIsAddModalOpen(true)}
+        onOpenIndicatorManagerModal={() => setIsIndicatorManagerOpen(true)}
       />
 
       {/* Main Content Body */}
@@ -207,7 +268,7 @@ export default function App() {
               onOpenSpreadsheetLink={() => setIsSpreadsheetModalOpen(true)}
             />
 
-            {/* Action Validation Buttons & Value Inputs */}
+            {/* Action Validation Buttons, Financial Integration & Value Inputs */}
             <ActionButtonsPanel
               indicators={indicators}
               values={currentValues}
@@ -222,8 +283,25 @@ export default function App() {
               onOpenAddModal={() => setIsAddModalOpen(true)}
               onOpenSpreadsheetModal={() => setIsSpreadsheetModalOpen(true)}
               onOpenDatabaseGuideModal={() => setIsDatabaseGuideModalOpen(true)}
+              onOpenIndicatorManagerModal={() => setIsIndicatorManagerOpen(true)}
+              moneySpent={currentMoneySpent}
+              onUpdateMoneySpent={handleUpdateMoneySpent}
+              spentDetails={currentSpentDetails}
+              textValues={currentTextValues}
+              onUpdateTextValue={handleUpdateTextValue}
             />
           </div>
+        )}
+
+        {activeTab === 'goals' && (
+          <GoalsView
+            goals={goals}
+            logs={dailyLogs}
+            onCreateGoal={handleCreateGoal}
+            onUpdateGoal={handleUpdateGoal}
+            onDeleteGoal={handleDeleteGoal}
+            onOpenIndicatorManager={() => setIsIndicatorManagerOpen(true)}
+          />
         )}
 
         {activeTab === 'spreadsheet' && (
@@ -260,9 +338,16 @@ export default function App() {
       <footer className="border-t border-[#1e293b] bg-[#080809] py-4 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400">
           <p>
-            Mindset Score & Indicadores Diários — Integrado ao Google Gemini e preparado para Android Studio.
+            Mindset Score & Indicadores Diários — Sistema de Metas Mensais & Projeção Integrado.
           </p>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsIndicatorManagerOpen(true)}
+              className="text-indigo-400 hover:text-indigo-300 font-mono text-[11px] underline"
+            >
+              ⚙️ Gerenciador de Indicadores
+            </button>
+            <span className="text-slate-600">•</span>
             <button
               onClick={() => setIsDatabaseGuideModalOpen(true)}
               className="text-indigo-400 hover:text-indigo-300 font-mono text-[11px] underline"
@@ -271,7 +356,7 @@ export default function App() {
             </button>
             <span className="text-slate-600">•</span>
             <span className="font-mono text-[11px] text-slate-400">
-              Armazenamento Local & Sincronização em Tempo Real
+              ScoreMind v2.0
             </span>
           </div>
         </div>
@@ -283,6 +368,13 @@ export default function App() {
         onClose={() => setIsAddModalOpen(false)}
         onAddIndicator={handleAddIndicator}
         existingIndicators={indicators}
+      />
+
+      <IndicatorManagerModal
+        isOpen={isIndicatorManagerOpen}
+        onClose={() => setIsIndicatorManagerOpen(false)}
+        indicators={indicators}
+        onSaveIndicators={(updatedList) => setIndicators(updatedList)}
       />
 
       <SpreadsheetLinkModal
@@ -304,4 +396,3 @@ export default function App() {
     </div>
   );
 }
-

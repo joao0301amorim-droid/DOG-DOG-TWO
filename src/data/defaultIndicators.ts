@@ -12,11 +12,13 @@ export const DEFAULT_INDICATORS: Indicator[] = [
     active: false, // Inativo por padrão conforme solicitado
     iconName: 'BookOpen',
     defaultValue: false,
+    additionalDataType: 'none',
+    order: 1,
   },
   {
     id: 'H02',
     name: 'COMPROU... HAHA',
-    description: 'Compra impulsiva, gasto desnecessário ou desvio financeiro não planejado.',
+    description: 'Compra impulsiva, gasto desnecessário ou desvio financeiro não planejado. Pergunta valor gasto para impactar o score e o fluxo de caixa.',
     type: 'boolean',
     category: 'Desvio',
     weight: 40, // -40 pontos
@@ -24,6 +26,9 @@ export const DEFAULT_INDICATORS: Indicator[] = [
     active: true,
     iconName: 'AlertTriangle',
     defaultValue: false,
+    additionalDataType: 'money',
+    unit: 'R$',
+    order: 2,
   },
   {
     id: 'H03',
@@ -36,6 +41,8 @@ export const DEFAULT_INDICATORS: Indicator[] = [
     active: true,
     iconName: 'Dumbbell',
     defaultValue: false,
+    additionalDataType: 'none',
+    order: 3,
   },
   {
     id: 'H04',
@@ -48,6 +55,8 @@ export const DEFAULT_INDICATORS: Indicator[] = [
     active: true,
     iconName: 'Zap',
     defaultValue: false,
+    additionalDataType: 'none',
+    order: 4,
   },
   {
     id: 'H05',
@@ -62,6 +71,8 @@ export const DEFAULT_INDICATORS: Indicator[] = [
     iconName: 'DollarSign',
     defaultValue: 0,
     targetValue: 100,
+    additionalDataType: 'money',
+    order: 5,
   },
   {
     id: 'H06',
@@ -74,6 +85,8 @@ export const DEFAULT_INDICATORS: Indicator[] = [
     active: true,
     iconName: 'Sparkles',
     defaultValue: false,
+    additionalDataType: 'none',
+    order: 6,
   },
   {
     id: 'H07',
@@ -86,6 +99,8 @@ export const DEFAULT_INDICATORS: Indicator[] = [
     active: true,
     iconName: 'ShieldAlert',
     defaultValue: false,
+    additionalDataType: 'text',
+    order: 7,
   },
 ];
 

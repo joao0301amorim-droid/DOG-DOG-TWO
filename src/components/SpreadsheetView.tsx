@@ -126,11 +126,31 @@ export const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({
       {/* Aggregate KPI Strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="p-4 rounded-2xl bg-[#111114] border border-[#1e293b] shadow-sm">
-          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-            Total Faturado Anotado
+          <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">
+            Total Ganhos Anotados
           </span>
           <span className="text-lg sm:text-xl font-extrabold text-emerald-400 font-mono tabular-nums block mt-1">
             {formatCurrencyBRL(totalMoney)}
+          </span>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-[#111114] border border-[#1e293b] shadow-sm">
+          <span className="text-[10px] uppercase font-bold text-rose-400 tracking-wider">
+            Total Gastos (Comprou... haha)
+          </span>
+          <span className="text-lg sm:text-xl font-extrabold text-rose-400 font-mono tabular-nums block mt-1">
+            {formatCurrencyBRL(logs.reduce((acc, l) => acc + (Number(l.moneySpent ?? l.spentDetails?.['H02'] ?? 0)), 0))}
+          </span>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-[#111114] border border-[#1e293b] shadow-sm">
+          <span className="text-[10px] uppercase font-bold text-emerald-300 tracking-wider">
+            Resultado Líquido Livre
+          </span>
+          <span className="text-lg sm:text-xl font-extrabold text-emerald-300 font-mono tabular-nums block mt-1">
+            {formatCurrencyBRL(
+              totalMoney - logs.reduce((acc, l) => acc + (Number(l.moneySpent ?? l.spentDetails?.['H02'] ?? 0)), 0)
+            )}
           </span>
         </div>
 
@@ -142,29 +162,8 @@ export const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({
             <span className="text-lg sm:text-xl font-extrabold text-white font-mono tabular-nums">
               {avgScore}
             </span>
-            <span className="text-xs text-slate-400">/ 100</span>
+            <span className="text-xs text-slate-400">/ 100 ({logs.length} dias)</span>
           </div>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-[#111114] border border-[#1e293b] shadow-sm">
-          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-            Dias de Alta Performance
-          </span>
-          <div className="flex items-baseline gap-1 mt-1">
-            <span className="text-lg sm:text-xl font-extrabold text-indigo-400 font-mono tabular-nums">
-              {idealDays}
-            </span>
-            <span className="text-xs text-slate-400">de {logs.length} dias ({Math.round((idealDays / (logs.length || 1)) * 100)}%)</span>
-          </div>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-[#111114] border border-[#1e293b] shadow-sm">
-          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-            Registros na Planilha
-          </span>
-          <span className="text-lg sm:text-xl font-extrabold text-slate-200 font-mono tabular-nums block mt-1">
-            {logs.length} dias
-          </span>
         </div>
       </div>
 
@@ -211,11 +210,13 @@ export const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({
                 <th className="py-3.5 px-4 whitespace-nowrap">Data / Dia</th>
                 <th className="py-3.5 px-4 text-center whitespace-nowrap">Score</th>
                 <th className="py-3.5 px-4 whitespace-nowrap">Faixa de Mindset</th>
-                <th className="py-3.5 px-4 whitespace-nowrap">Ganho Financeiro</th>
+                <th className="py-3.5 px-4 whitespace-nowrap text-emerald-400">Ganhos</th>
+                <th className="py-3.5 px-4 whitespace-nowrap text-rose-400">Gastos</th>
+                <th className="py-3.5 px-4 whitespace-nowrap text-emerald-300">Líquido</th>
                 {/* Dynamically list top indicators */}
                 {indicators
-                  .filter((i) => i.id !== 'ind_money')
-                  .slice(0, 5)
+                  .filter((i) => i.id !== 'H05' && i.id !== 'ind_money')
+                  .slice(0, 4)
                   .map((ind) => (
                     <th key={ind.id} className="py-3.5 px-3 text-center whitespace-nowrap">
                       {ind.name.split('?')[0].replace('hoje', '').trim()}
@@ -230,14 +231,16 @@ export const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({
             <tbody className="divide-y divide-[#1e293b]/60 text-slate-300">
               {filteredLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-400">
+                  <td colSpan={12} className="py-12 text-center text-slate-400">
                     Nenhum registro encontrado para os filtros selecionados.
                   </td>
                 </tr>
               ) : (
                 filteredLogs.map((log) => {
                   const tier = SCORE_TIERS[log.tier] || SCORE_TIERS.neutral;
-                  const money = Number(log.moneyEarned ?? log.values['ind_money'] ?? 0);
+                  const money = Number(log.moneyEarned ?? log.values['H05'] ?? log.values['ind_money'] ?? 0);
+                  const spent = Number(log.moneySpent ?? log.spentDetails?.['H02'] ?? 0);
+                  const net = money - spent;
 
                   return (
                     <tr
@@ -281,10 +284,32 @@ export const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({
                         </span>
                       </td>
 
-                      {/* Top 5 Indicator values */}
+                      {/* Money Spent */}
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span
+                          className={`font-bold font-mono tabular-nums ${
+                            spent > 0 ? 'text-rose-400' : 'text-slate-500'
+                          }`}
+                        >
+                          {formatCurrencyBRL(spent)}
+                        </span>
+                      </td>
+
+                      {/* Net Result */}
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span
+                          className={`font-bold font-mono tabular-nums ${
+                            net > 0 ? 'text-emerald-300' : net < 0 ? 'text-rose-400' : 'text-slate-400'
+                          }`}
+                        >
+                          {formatCurrencyBRL(net)}
+                        </span>
+                      </td>
+
+                      {/* Top 4 Indicator values */}
                       {indicators
-                        .filter((i) => i.id !== 'ind_money')
-                        .slice(0, 5)
+                        .filter((i) => i.id !== 'H05' && i.id !== 'ind_money')
+                        .slice(0, 4)
                         .map((ind) => {
                           const val = log.values[ind.id];
                           return (

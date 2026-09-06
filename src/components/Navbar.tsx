@@ -2,6 +2,7 @@ import React from 'react';
 import {
   BrainCircuit,
   LayoutDashboard,
+  Target,
   Table,
   LineChart,
   Bot,
@@ -9,17 +10,19 @@ import {
   PlusCircle,
   Calendar,
   Sparkles,
+  Settings2,
 } from 'lucide-react';
 import { ScoreTierInfo } from '../types';
 
 interface NavbarProps {
-  activeTab: 'actions' | 'spreadsheet' | 'weekly' | 'gemini' | 'android';
-  setActiveTab: (tab: 'actions' | 'spreadsheet' | 'weekly' | 'gemini' | 'android') => void;
+  activeTab: 'actions' | 'goals' | 'spreadsheet' | 'weekly' | 'gemini' | 'android';
+  setActiveTab: (tab: 'actions' | 'goals' | 'spreadsheet' | 'weekly' | 'gemini' | 'android') => void;
   selectedDate: string;
   setSelectedDate: (date: string) => void;
   currentScore: number;
   currentTierInfo: ScoreTierInfo;
   onOpenAddModal: () => void;
+  onOpenIndicatorManagerModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -30,6 +33,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentScore,
   currentTierInfo,
   onOpenAddModal,
+  onOpenIndicatorManagerModal,
 }) => {
   const isToday = selectedDate === new Date().toISOString().split('T')[0];
 
@@ -79,7 +83,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </div>
 
-          {/* Controls: Date Picker & Add Indicator Button */}
+          {/* Controls: Date Picker, Indicator Manager & Add Indicator Button */}
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="relative flex items-center">
               <input
@@ -99,6 +103,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
               )}
             </div>
+
+            {onOpenIndicatorManagerModal && (
+              <button
+                id="open-indicator-manager-nav-btn"
+                onClick={onOpenIndicatorManagerModal}
+                className="flex items-center gap-1.5 bg-[#16161a] hover:bg-[#222228] text-slate-300 hover:text-white text-xs font-bold px-3 py-2 rounded-lg border border-[#2e2e36] transition-all active:scale-95"
+                title="Gerenciador de Indicadores"
+              >
+                <Settings2 className="w-4 h-4 text-indigo-400" />
+                <span className="hidden md:inline">⚙️ Indicadores</span>
+              </button>
+            )}
 
             <button
               id="add-custom-indicator-nav-btn"
@@ -124,6 +140,22 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <LayoutDashboard className="w-4 h-4 text-indigo-400" />
             <span>Coleta & Ações</span>
+          </button>
+
+          <button
+            id="tab-goals"
+            onClick={() => setActiveTab('goals')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all ${
+              activeTab === 'goals'
+                ? 'bg-[#1a1a1e] text-white border border-amber-500/60 shadow-[0_0_12px_rgba(245,158,11,0.2)]'
+                : 'text-[#94a3b8] hover:text-white hover:bg-[#111114]'
+            }`}
+          >
+            <Target className="w-4 h-4 text-amber-400" />
+            <span className="flex items-center gap-1.5">
+              🎯 Metas Mensais
+              <span className="text-[9px] font-mono px-1 rounded bg-amber-500/20 text-amber-300 font-bold">NOVO</span>
+            </span>
           </button>
 
           <button
@@ -185,3 +217,4 @@ export const Navbar: React.FC<NavbarProps> = ({
     </header>
   );
 };
+

@@ -1,10 +1,12 @@
-import { DailyLog, Indicator } from '../types';
+import { DailyLog, Indicator, Goal } from '../types';
 import { DEFAULT_INDICATORS } from '../data/defaultIndicators';
 import { SAMPLE_DAILY_LOGS } from '../data/sampleHistory';
+import { DEFAULT_GOALS } from '../data/defaultGoals';
 
 const STORAGE_KEYS = {
-  INDICATORS: 'mindset_indicators_v1',
-  LOGS: 'mindset_daily_logs_v1',
+  INDICATORS: 'mindset_indicators_v2',
+  LOGS: 'mindset_daily_logs_v2',
+  GOALS: 'mindset_monthly_goals_v2',
   SELECTED_DATE: 'mindset_selected_date_v1',
 };
 
@@ -50,6 +52,29 @@ export function saveDailyLogs(logs: DailyLog[]): void {
   }
 }
 
+export function loadGoals(): Goal[] {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.GOALS);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.error('Erro ao carregar metas:', e);
+  }
+  return DEFAULT_GOALS;
+}
+
+export function saveGoals(goals: Goal[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(goals));
+  } catch (e) {
+    console.error('Erro ao salvar metas:', e);
+  }
+}
+
+export { loadGoals as loadSavedGoals, saveGoals as saveMonthlyGoals };
+
 export function exportLogsToCSV(logs: DailyLog[], indicators: Indicator[]): void {
   if (!logs || logs.length === 0) return;
 
@@ -58,7 +83,9 @@ export function exportLogsToCSV(logs: DailyLog[], indicators: Indicator[]): void
     'Dia da Semana',
     'Score Final',
     'Faixa / Classificação',
-    'Dinheiro Ganho (R$)',
+    'Ganhos (R$)',
+    'Gastos (R$)',
+    'Resultado Líquido (R$)',
     ...indicators.map((i) => `"${i.name.replace(/"/g, '""')}"`),
     'Observação do Dia',
     'Hora de Validação',
@@ -72,14 +99,18 @@ export function exportLogsToCSV(logs: DailyLog[], indicators: Indicator[]): void
       return String(val);
     });
 
-    const money = log.moneyEarned ?? log.values['ind_money'] ?? 0;
+    const moneyEarned = Number(log.moneyEarned ?? log.values['H05'] ?? log.values['ind_money'] ?? 0);
+    const moneySpent = Number(log.moneySpent ?? log.spentDetails?.['H02'] ?? 0);
+    const netResult = moneyEarned - moneySpent;
 
     return [
       log.date,
       log.dayOfWeek,
       log.score,
       log.tier,
-      money,
+      moneyEarned,
+      moneySpent,
+      netResult,
       ...indicatorCols.map((c) => `"${String(c).replace(/"/g, '""')}"`),
       `"${(log.observation || '').replace(/"/g, '""')}"`,
       log.validatedAt,
@@ -97,10 +128,11 @@ export function exportLogsToCSV(logs: DailyLog[], indicators: Indicator[]): void
   document.body.removeChild(link);
 }
 
-export function exportAllDataJSON(logs: DailyLog[], indicators: Indicator[]): void {
+export function exportAllDataJSON(logs: DailyLog[], indicators: Indicator[], goals?: Goal[]): void {
   const data = {
     exportedAt: new Date().toISOString(),
     indicators,
+    goals: goals || [],
     logs,
   };
   const jsonStr = JSON.stringify(data, null, 2);
@@ -113,3 +145,4 @@ export function exportAllDataJSON(logs: DailyLog[], indicators: Indicator[]): vo
   link.click();
   document.body.removeChild(link);
 }
+
