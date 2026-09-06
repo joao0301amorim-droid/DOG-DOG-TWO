@@ -233,34 +233,50 @@ class MindsetScoreViewModel : ViewModel() {
 package com.mindsetscore.app.ai
 
 import com.google.ai.client.generativeai.GenerativeModel
+import com.google.ai.client.generativeai.type.GoogleGenerativeAIException
 
 class GeminiMindsetService(apiKey: String) {
 
     private val generativeModel = GenerativeModel(
-        modelName = "gemini-3.7-flash",
+        // Utilize o modelo estável padrão do SDK do Android
+        modelName = "gemini-1.5-flash", 
         apiKey = apiKey
     )
 
     suspend fun analyzeWeeklyProgression(
         weeklyLogsJson: String,
-        indicatorsList: String
+        indicatorsList: String,
+        userQuestion: String? = null
     ): String {
+        // Validação básica para evitar requisições sem contexto
+        if (weeklyLogsJson.isBlank() && indicatorsList.isBlank()) {
+            return "Nenhum dado diário ou indicador foi encontrado para análise."
+        }
+
         val prompt = """
             Você é um Mentor de Alta Performance e Mindset Score.
-            Analise os seguintes dados do usuário coletados na semana:
+            Analise os seguintes dados do usuário:
             
             Indicadores: $indicatorsList
             Registros Diários: $weeklyLogsJson
             
-            Responda detalhadamente:
-            1. O usuário está PROGREDINDO ou se PREJUDICANDO?
-            2. Quais foram os dias de melhor pontuação e comportamento ideal?
-            3. Como o dinheiro/faturamento se correlacionou com a disciplina?
-            4. 3 Ações práticas de ajuste para os próximos dias.
+            Pergunta/Contexto do Usuário: \${userQuestion ?: "Análise geral de progresso"}
+            
+            Responda de forma clara:
+            1. Avaliação de progresso ou estagnação.
+            2. Dias com melhor comportamento.
+            3. Correlação entre ações e ganhos financeiros.
+            4. 3 ações práticas de ajuste.
         """.trimIndent()
 
-        val response = generativeModel.generateContent(prompt)
-        return response.text ?: "Não foi possível gerar a análise."
+        return try {
+            val response = generativeModel.generateContent(prompt)
+            response.text ?: "O modelo gerou uma resposta vazia por restrição de conteúdo."
+        } catch (e: GoogleGenerativeAIException) {
+            "Erro na comunicação com a API do Gemini: \${e.localizedMessage}"
+        } catch (e: Exception) {
+            "Erro inesperado ao processar análise."
+        }
     }
 }
 `;
