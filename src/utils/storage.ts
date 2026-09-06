@@ -146,3 +146,162 @@ export function exportAllDataJSON(logs: DailyLog[], indicators: Indicator[], goa
   document.body.removeChild(link);
 }
 
+export interface ParsedImportData {
+  logs?: DailyLog[];
+  indicators?: Indicator[];
+  goals?: Goal[];
+  sourceType: 'json_full' | 'json_logs' | 'json_goals' | 'json_indicators' | 'csv_logs';
+  summary: {
+    logsCount: number;
+    indicatorsCount: number;
+    goalsCount: number;
+    dateRange?: { start: string; end: string };
+  };
+}
+
+export function parseImportJSON(jsonString: string): ParsedImportData {
+  const parsed = JSON.parse(jsonString);
+
+  let logs: DailyLog[] = [];
+  let indicators: Indicator[] = [];
+  let goals: Goal[] = [];
+  let sourceType: ParsedImportData['sourceType'] = 'json_full';
+
+  // Case 1: Full backup object { indicators, goals, logs }
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    if (Array.isArray(parsed.logs)) logs = parsed.logs;
+    if (Array.isArray(parsed.indicators)) indicators = parsed.indicators;
+    if (Array.isArray(parsed.goals)) goals = parsed.goals;
+    sourceType = 'json_full';
+  } else if (Array.isArray(parsed)) {
+    // Case 2: Array of something
+    if (parsed.length > 0) {
+      const first = parsed[0];
+      if ('date' in first && ('score' in first || 'values' in first)) {
+        logs = parsed as DailyLog[];
+        sourceType = 'json_logs';
+      } else if ('monthKey' in first && 'targetValue' in first) {
+        goals = parsed as Goal[];
+        sourceType = 'json_goals';
+      } else if ('weight' in first && 'category' in first) {
+        indicators = parsed as Indicator[];
+        sourceType = 'json_indicators';
+      }
+    }
+  }
+
+  // Validate and clean logs
+  logs = logs.filter((l) => l && typeof l === 'object' && l.date).map((l) => ({
+    ...l,
+    id: l.id || `log-${l.date}`,
+    values: l.values || {},
+    score: typeof l.score === 'number' ? l.score : 0,
+    tier: l.tier || 'neutral',
+  }));
+
+  // Sort logs by date descending
+  logs.sort((a, b) => b.date.localeCompare(a.date));
+
+  // Determine date range
+  let dateRange: { start: string; end: string } | undefined;
+  if (logs.length > 0) {
+    const dates = logs.map((l) => l.date).sort();
+    dateRange = { start: dates[0], end: dates[dates.length - 1] };
+  }
+
+  return {
+    logs,
+    indicators,
+    goals,
+    sourceType,
+    summary: {
+      logsCount: logs.length,
+      indicatorsCount: indicators.length,
+      goalsCount: goals.length,
+      dateRange,
+    },
+  };
+}
+
+export function parseCSVToLogs(csvString: string, existingIndicators: Indicator[]): ParsedImportData {
+  const lines = csvString.trim().split(/\r?\n/);
+  if (lines.length < 2) {
+    throw new Error('O arquivo CSV deve conter pelo menos um cabeçalho e uma linha de dados.');
+  }
+
+  const headerLine = lines[0].replace(/^\uFEFF/, ''); // Strip BOM
+  const headers = headerLine.split(';').map((h) => h.replace(/^"|"$/g, '').trim());
+
+  const dateIdx = headers.findIndex((h) => h.toLowerCase().includes('data'));
+  const scoreIdx = headers.findIndex((h) => h.toLowerCase().includes('score'));
+  const dayOfWeekIdx = headers.findIndex((h) => h.toLowerCase().includes('dia da semana'));
+  const tierIdx = headers.findIndex((h) => h.toLowerCase().includes('faixa'));
+  const earnedIdx = headers.findIndex((h) => h.toLowerCase().includes('ganho') || h.toLowerCase().includes('faturado'));
+  const spentIdx = headers.findIndex((h) => h.toLowerCase().includes('gasto'));
+  const obsIdx = headers.findIndex((h) => h.toLowerCase().includes('observa'));
+
+  if (dateIdx === -1) {
+    throw new Error('Não foi possível identificar a coluna de Data no CSV.');
+  }
+
+  const logs: DailyLog[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    // Simple semicolon split considering quotes
+    const cols = line.split(';').map((c) => c.replace(/^"|"$/g, '').trim());
+    const date = cols[dateIdx];
+    if (!date || !date.match(/^\d{4}-\d{2}-\d{2}$/)) continue;
+
+    const score = scoreIdx !== -1 ? Number(cols[scoreIdx]) || 0 : 0;
+    const dayOfWeek = dayOfWeekIdx !== -1 ? cols[dayOfWeekIdx] : '';
+    const tier = tierIdx !== -1 ? (cols[tierIdx] as any) : 'neutral';
+    const moneyEarned = earnedIdx !== -1 ? Number(cols[earnedIdx].replace(/[^\d.-]/g, '')) || 0 : 0;
+    const moneySpent = spentIdx !== -1 ? Number(cols[spentIdx].replace(/[^\d.-]/g, '')) || 0 : 0;
+    const observation = obsIdx !== -1 ? cols[obsIdx] : '';
+
+    const values: Record<string, boolean | number> = {
+      H05: moneyEarned,
+      H02: moneySpent > 0,
+    };
+
+    logs.push({
+      id: `log-${date}`,
+      date,
+      dayOfWeek: dayOfWeek || 'Dia',
+      score,
+      tier: (tier && ['elite', 'high', 'neutral', 'critical'].includes(tier)) ? tier : 'neutral',
+      values,
+      moneyEarned,
+      moneySpent,
+      spentDetails: moneySpent > 0 ? { H02: moneySpent } : {},
+      observation,
+      validatedAt: new Date().toISOString(),
+    });
+  }
+
+  logs.sort((a, b) => b.date.localeCompare(a.date));
+
+  let dateRange: { start: string; end: string } | undefined;
+  if (logs.length > 0) {
+    const dates = logs.map((l) => l.date).sort();
+    dateRange = { start: dates[0], end: dates[dates.length - 1] };
+  }
+
+  return {
+    logs,
+    indicators: [],
+    goals: [],
+    sourceType: 'csv_logs',
+    summary: {
+      logsCount: logs.length,
+      indicatorsCount: 0,
+      goalsCount: 0,
+      dateRange,
+    },
+  };
+}
+
+

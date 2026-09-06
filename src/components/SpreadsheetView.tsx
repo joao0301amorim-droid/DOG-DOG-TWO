@@ -17,6 +17,7 @@ import {
   Award,
   Eye,
   Trash2,
+  UploadCloud,
 } from 'lucide-react';
 
 interface SpreadsheetViewProps {
@@ -25,6 +26,7 @@ interface SpreadsheetViewProps {
   onSelectDate: (date: string) => void;
   onDeleteLog?: (logId: string) => void;
   onOpenSpreadsheetModal?: () => void;
+  onOpenImportModal?: () => void;
 }
 
 export const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({
@@ -33,6 +35,7 @@ export const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({
   onSelectDate,
   onDeleteLog,
   onOpenSpreadsheetModal,
+  onOpenImportModal,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTierFilter, setSelectedTierFilter] = useState<string>('all');
@@ -100,6 +103,17 @@ export const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
               <span>Janela de Registro & Vínculo</span>
+            </button>
+          )}
+
+          {onOpenImportModal && (
+            <button
+              id="open-import-modal-spreadsheet-btn"
+              onClick={onOpenImportModal}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold shadow-sm transition-all active:scale-95"
+            >
+              <UploadCloud className="w-4 h-4" />
+              <span>Importar Dados</span>
             </button>
           )}
 

@@ -22,6 +22,7 @@ import { AddIndicatorModal } from './components/AddIndicatorModal';
 import { SpreadsheetLinkModal } from './components/SpreadsheetLinkModal';
 import { DatabaseTrackingGuideModal } from './components/DatabaseTrackingGuideModal';
 import { IndicatorManagerModal } from './components/IndicatorManagerModal';
+import { ImportDataModal } from './components/ImportDataModal';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'actions' | 'goals' | 'spreadsheet' | 'weekly' | 'gemini' | 'android'>('actions');
@@ -48,6 +49,7 @@ export default function App() {
   const [isSpreadsheetModalOpen, setIsSpreadsheetModalOpen] = useState(false);
   const [isDatabaseGuideModalOpen, setIsDatabaseGuideModalOpen] = useState(false);
   const [isIndicatorManagerOpen, setIsIndicatorManagerOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   // Sync with storage on changes
   useEffect(() => {
@@ -216,17 +218,85 @@ export default function App() {
     setActiveTab('actions');
   };
 
-  // Goal Handlers
-  const handleCreateGoal = (newGoal: MonthlyGoal) => {
-    setGoals((prev) => [...prev, newGoal]);
+  // Goal Handlers & Priority Swap
+  const handleSaveGoal = (goalToSave: MonthlyGoal) => {
+    setGoals((prev) => {
+      let updated = [...prev];
+      // If saving as PRINCIPAL, ensure only 1 PRINCIPAL exists for this monthKey
+      if (goalToSave.priority === 'PRINCIPAL') {
+        updated = updated.map((g) => {
+          if (g.monthKey === goalToSave.monthKey && g.id !== goalToSave.id && g.priority === 'PRINCIPAL') {
+            return { ...g, priority: 'ALTA' as any, updatedAt: new Date().toISOString() };
+          }
+          return g;
+        });
+      }
+      const index = updated.findIndex((g) => g.id === goalToSave.id);
+      if (index !== -1) {
+        updated[index] = goalToSave;
+      } else {
+        updated.push(goalToSave);
+      }
+      return updated;
+    });
   };
 
-  const handleUpdateGoal = (updatedGoal: MonthlyGoal) => {
-    setGoals((prev) => prev.map((g) => (g.id === updatedGoal.id ? updatedGoal : g)));
+  const handleSwapPrimaryGoal = (monthKey: string, newPrimaryGoalId: string) => {
+    setGoals((prev) => {
+      const monthGoals = prev.filter((g) => g.monthKey === monthKey);
+      const currentPrimary = monthGoals.find((g) => g.priority === 'PRINCIPAL');
+      return prev.map((g) => {
+        if (g.monthKey !== monthKey) return g;
+        if (g.id === newPrimaryGoalId) {
+          return { ...g, priority: 'PRINCIPAL', updatedAt: new Date().toISOString() };
+        }
+        if (currentPrimary && g.id === currentPrimary.id) {
+          return { ...g, priority: 'ALTA', updatedAt: new Date().toISOString() };
+        }
+        return g;
+      });
+    });
   };
 
   const handleDeleteGoal = (goalId: string) => {
     setGoals((prev) => prev.filter((g) => g.id !== goalId));
+  };
+
+  // Import Data Handler
+  const handleImportSuccess = (imported: {
+    logs?: DailyLog[];
+    indicators?: Indicator[];
+    goals?: MonthlyGoal[];
+    mode: 'merge' | 'replace';
+  }) => {
+    if (imported.mode === 'replace') {
+      if (imported.logs) setDailyLogs(imported.logs);
+      if (imported.indicators) setIndicators(imported.indicators);
+      if (imported.goals) setGoals(imported.goals);
+    } else {
+      // Merge mode
+      if (imported.logs && imported.logs.length > 0) {
+        setDailyLogs((prev) => {
+          const map = new Map<string, DailyLog>(prev.map((l) => [l.date, l]));
+          imported.logs!.forEach((l) => map.set(l.date, l));
+          return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
+        });
+      }
+      if (imported.indicators && imported.indicators.length > 0) {
+        setIndicators((prev) => {
+          const map = new Map<string, Indicator>(prev.map((i) => [i.id, i]));
+          imported.indicators!.forEach((i) => map.set(i.id, i));
+          return Array.from(map.values());
+        });
+      }
+      if (imported.goals && imported.goals.length > 0) {
+        setGoals((prev) => {
+          const map = new Map<string, MonthlyGoal>(prev.map((g) => [g.id, g]));
+          imported.goals!.forEach((g) => map.set(g.id, g));
+          return Array.from(map.values());
+        });
+      }
+    }
   };
 
   return (
@@ -241,6 +311,7 @@ export default function App() {
         currentTierInfo={currentTierInfo}
         onOpenAddModal={() => setIsAddModalOpen(true)}
         onOpenIndicatorManagerModal={() => setIsIndicatorManagerOpen(true)}
+        onOpenImportModal={() => setIsImportModalOpen(true)}
       />
 
       {/* Main Content Body */}
@@ -297,9 +368,11 @@ export default function App() {
           <GoalsView
             goals={goals}
             logs={dailyLogs}
-            onCreateGoal={handleCreateGoal}
-            onUpdateGoal={handleUpdateGoal}
+            indicators={indicators}
+            onSaveGoal={handleSaveGoal}
             onDeleteGoal={handleDeleteGoal}
+            onSwapPrimaryGoal={handleSwapPrimaryGoal}
+            onSelectDate={handleSelectDateFromOtherViews}
             onOpenIndicatorManager={() => setIsIndicatorManagerOpen(true)}
           />
         )}
@@ -311,6 +384,7 @@ export default function App() {
             onSelectDate={handleSelectDateFromOtherViews}
             onDeleteLog={handleDeleteLog}
             onOpenSpreadsheetModal={() => setIsSpreadsheetModalOpen(true)}
+            onOpenImportModal={() => setIsImportModalOpen(true)}
           />
         )}
 
@@ -392,6 +466,13 @@ export default function App() {
       <DatabaseTrackingGuideModal
         isOpen={isDatabaseGuideModalOpen}
         onClose={() => setIsDatabaseGuideModalOpen(false)}
+      />
+
+      <ImportDataModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        indicators={indicators}
+        onImportSuccess={handleImportSuccess}
       />
     </div>
   );

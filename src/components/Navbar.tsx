@@ -11,6 +11,7 @@ import {
   Calendar,
   Sparkles,
   Settings2,
+  UploadCloud,
 } from 'lucide-react';
 import { ScoreTierInfo } from '../types';
 
@@ -23,6 +24,7 @@ interface NavbarProps {
   currentTierInfo: ScoreTierInfo;
   onOpenAddModal: () => void;
   onOpenIndicatorManagerModal?: () => void;
+  onOpenImportModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -34,6 +36,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentTierInfo,
   onOpenAddModal,
   onOpenIndicatorManagerModal,
+  onOpenImportModal,
 }) => {
   const isToday = selectedDate === new Date().toISOString().split('T')[0];
 
@@ -103,6 +106,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
               )}
             </div>
+
+            {onOpenImportModal && (
+              <button
+                id="open-import-modal-nav-btn"
+                onClick={onOpenImportModal}
+                className="flex items-center gap-1.5 bg-[#16161a] hover:bg-[#222228] text-slate-300 hover:text-white text-xs font-bold px-3 py-2 rounded-lg border border-[#2e2e36] transition-all active:scale-95"
+                title="Importar Dados (JSON ou CSV)"
+              >
+                <UploadCloud className="w-4 h-4 text-emerald-400" />
+                <span className="hidden sm:inline">Importar</span>
+              </button>
+            )}
 
             {onOpenIndicatorManagerModal && (
               <button
